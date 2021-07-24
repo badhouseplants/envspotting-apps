@@ -1,0 +1,14 @@
+---
+version: "3.9"
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: qwertyu9
+      POSTGRES_DB: aggregator
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    image: postgres:12

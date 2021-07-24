@@ -1,0 +1,1 @@
+ALETR TABLE contours DROP COLUMN id, application_id, password, name, description, services;
