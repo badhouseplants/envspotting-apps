@@ -3,7 +3,7 @@ module github.com/badhouseplants/envspotting-apps
 go 1.16
 
 require (
-	github.com/badhouseplants/envspotting-go-proto v0.0.4-dev14
+	github.com/badhouseplants/envspotting-go-proto v1.0.0-dev
 	github.com/go-redis/redis/v8 v8.11.0
 	github.com/golang-migrate/migrate/v4 v4.14.1
 	github.com/google/uuid v1.3.0
