@@ -6,6 +6,7 @@ import (
 
 	repo "github.com/badhouseplants/envspotting-apps/repo/contours"
 	"github.com/badhouseplants/envspotting-apps/third_party/postgres"
+	"github.com/badhouseplants/envspotting-apps/tools/logger"
 	"github.com/badhouseplants/envspotting-go-proto/models/apps/applications"
 	"github.com/badhouseplants/envspotting-go-proto/models/apps/contours"
 	"github.com/badhouseplants/envspotting-go-proto/models/common"
@@ -17,7 +18,10 @@ import (
 var apprepo repo.ContourStore
 
 var initRepo = func(ctx context.Context) repo.ContourStore {
+	log := logger.GetGrpcLogger(ctx)
+	log.Info("check for init")
 	if apprepo == nil {
+		log.Info("Init new repo")
 		apprepo = repo.ContourRepo{
 			Pool:      postgres.Pool(ctx),
 			CreatedAt: time.Now(),
