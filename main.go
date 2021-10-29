@@ -39,6 +39,16 @@ func init() {
 
 func main() {
 	log := logger.GetServerLogger()
+	log.Info(viper.Get("envspotting_apps_host"))
+	log.Info(viper.Get("envspotting_apps_port"))
+	log.Info(viper.Get("envspotting_users_host"))
+	log.Info(viper.Get("envspotting_users_port"))
+	log.Info(viper.Get("database_username"))
+	log.Info(viper.Get("database_password"))
+	log.Info(viper.Get("database_name"))
+	log.Info(viper.Get("database_host"))
+	log.Info(viper.Get("database_port"))
+
 	// migrations
 	err := migrations.Migrate()
 	if err != nil {
