@@ -8,11 +8,9 @@ import (
 	"github.com/badhouseplants/envspotting-apps/tools/logger"
 	"github.com/badhouseplants/envspotting-go-proto/models/apps/applications"
 	"github.com/badhouseplants/envspotting-go-proto/models/users/accounts"
-	"github.com/badhouseplants/envspotting-go-proto/models/users/rights"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/badhouseplants/envspotting-apps/third_party/postgres"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v4"
@@ -24,10 +22,10 @@ import (
 type ApplicationStore interface {
 	Create(context.Context, *applications.AppWithoutContours) error
 	Get(context.Context, *applications.AppId) (*applications.AppFullInfo, error)
-	Delete(context.Context, *applications.AppId) (err error) 
+	Delete(context.Context, *applications.AppId) (err error)
 	Update(context.Context, *applications.AppWithoutContours) error
 	ListAdded(context.Context, applications.Applications_ListServer, *accounts.AccountsApps) error
-	ListAvailable(context.Context, applications.Applications_ListServer, *rights.Applications) error
+	ListAvailable(context.Context, applications.Applications_ListServer, []string) error
 }
 
 // ApplicationRepo implements ApplicationRepo
@@ -38,6 +36,7 @@ type ApplicationRepo struct {
 
 // Create application (add to database)
 func (store ApplicationRepo) Create(ctx context.Context, app *applications.AppWithoutContours) (err error) {
+	defer store.Pool.Release()
 	const sql = "INSERT INTO applications (id, name, description) VALUES ($1, $2, $3);"
 	var log = logger.GetGrpcLogger(ctx)
 	_, err = store.Pool.Exec(ctx, sql, app.GetId(), app.GetName(), app.GetDescription())
@@ -58,6 +57,7 @@ func (store ApplicationRepo) Create(ctx context.Context, app *applications.AppWi
 
 // Get application (from database)
 func (store ApplicationRepo) Get(ctx context.Context, appIn *applications.AppId) (*applications.AppFullInfo, error) {
+	defer store.Pool.Release()
 	const sql = "SELECT id, name, description, contours FROM applications WHERE id = $1"
 	var (
 		err    error
@@ -78,6 +78,7 @@ func (store ApplicationRepo) Get(ctx context.Context, appIn *applications.AppId)
 
 // Update applications (database update)
 func (store ApplicationRepo) Update(ctx context.Context, app *applications.AppWithoutContours) (err error) {
+	defer store.Pool.Release()
 	const sql = "UPDATE applications SET name=$2, description=$3 WHERE id=$1 RETURNING *"
 	var log = logger.GetGrpcLogger(ctx)
 	tag, err := store.Pool.Exec(ctx, sql, app.GetId(), app.GetName(), app.GetDescription())
@@ -99,18 +100,17 @@ func (store ApplicationRepo) Update(ctx context.Context, app *applications.AppWi
 	return nil
 }
 
-
 // List applications (streaming from database)
-func (store ApplicationRepo) ListAvailable(ctx context.Context, stream applications.Applications_ListServer, apps *rights.Applications) error {
+func (store ApplicationRepo) ListAvailable(ctx context.Context, stream applications.Applications_ListServer, apps []string) error {
+	defer store.Pool.Release()
 	// TODO: Add pagination @allanger
-	const sql = "SELECT id, name, description FROM applications WHERE id = $1"
+	const sql = "SELECT id, name, description FROM applications WHERE id=ANY($1);"
 	var (
-		db  = postgres.Pool(ctx)
 		log = logger.GetGrpcLogger(ctx)
 		app = &applications.AppWithoutContours{}
 	)
 	// Get applications
-	rows, err := db.Query(ctx, sql, apps.GetApplicationId().GetId())
+	rows, err := store.Pool.Query(ctx, sql, apps)
 	if err != nil {
 		log.Error(err)
 		return status.Error(codes.Internal, err.Error())
@@ -134,15 +134,15 @@ func (store ApplicationRepo) ListAvailable(ctx context.Context, stream applicati
 
 // List applications (streaming from database)
 func (store ApplicationRepo) ListAdded(ctx context.Context, stream applications.Applications_ListServer, apps *accounts.AccountsApps) error {
+	defer store.Pool.Release()
 	// TODO: Add pagination @allanger
-	const sql = "SELECT id, name, description FROM applications WHERE id=ANY(ARRAY($1));"
+	const sql = "SELECT id, name, description FROM applications WHERE id=ANY($1)"
 	var (
-		db  = postgres.Pool(ctx)
 		log = logger.GetGrpcLogger(ctx)
 		app = &applications.AppWithoutContours{}
 	)
 	// Get applications
-	rows, err := db.Query(ctx, sql, apps.Apps)
+	rows, err := store.Pool.Query(ctx, sql, apps.Apps)
 	if err != nil {
 		log.Error(err)
 		return status.Error(codes.Internal, err.Error())
@@ -166,9 +166,10 @@ func (store ApplicationRepo) ListAdded(ctx context.Context, stream applications.
 
 // Get application (from database)
 func (store ApplicationRepo) Delete(ctx context.Context, appIn *applications.AppId) (err error) {
+	defer store.Pool.Release()
 	const sql = "DELETE FROM applications WHERE id = $1"
 	var (
-		log    = logger.GetGrpcLogger(ctx)
+		log = logger.GetGrpcLogger(ctx)
 	)
 	tag, err := store.Pool.Exec(ctx, sql, appIn.Id)
 	if tag.RowsAffected() == 0 {

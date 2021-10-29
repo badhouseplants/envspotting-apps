@@ -56,6 +56,8 @@ func Pool(ctx context.Context) *pgxpool.Conn {
 			return Pool(ctx)
 		}
 	}
+	log.Info(pool.Stat().AcquiredConns())
+
 	return conn
 }
 

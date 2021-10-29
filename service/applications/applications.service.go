@@ -18,14 +18,13 @@ import (
 	"github.com/google/uuid"
 )
 
-var apprepo repo.ApplicationStore
+// var apprepo repo.ApplicationStore
 
 var initRepo = func(ctx context.Context) repo.ApplicationStore {
-	if apprepo == nil {
-		apprepo = repo.ApplicationRepo{
-			Pool:      postgres.Pool(ctx),
-			CreatedAt: time.Now(),
-		}
+	conn := postgres.Pool(ctx)
+	apprepo := repo.ApplicationRepo{
+		Pool:      conn,
+		CreatedAt: time.Now(),
 	}
 	return apprepo
 }
@@ -126,7 +125,8 @@ func Delete(ctx context.Context, app *applications.AppIdAndName) (*common.EmptyM
 func List(ctx context.Context, stream applications.Applications_ListServer, options *applications.ListOptions) error {
 	repo := initRepo(ctx)
 	var (
-		log = logger.GetGrpcLogger(ctx)
+		log     = logger.GetGrpcLogger(ctx)
+		appsArr []string
 	)
 	userID, err := grpcusers.AuthorizationClient.ParseIdFromToken(
 		metadata.MetadataInternalProxy(stream.Context()),
@@ -135,6 +135,7 @@ func List(ctx context.Context, stream applications.Applications_ListServer, opti
 	if err != nil {
 		return err
 	}
+
 	if options.Added {
 		apps, err := grpcusers.AccountClient.GetAppsFromUser(
 			metadata.MetadataInternalProxy(stream.Context()),
@@ -157,23 +158,17 @@ func List(ctx context.Context, stream applications.Applications_ListServer, opti
 			return err
 		}
 
-		done := make(chan bool)
-
-		go func() {
-			for {
-				availableApps, err := apps.Recv()
-				if err == io.EOF {
-					done <- true
-					return
-				}
-				if err != nil {
-					log.Errorf("cannot receive %v", err)
-				}
-				repo.ListAvailable(stream.Context(), stream, availableApps)
+		for {
+			availableApps, err := apps.Recv()
+			if err == io.EOF {
+				break
 			}
-		}()
-
-		<-done //we will wait until all response is received
+			if err != nil {
+				log.Errorf("cannot receive %v", err)
+			}
+			appsArr = append(appsArr, availableApps.GetApplicationId().GetId())
+		}
+		repo.ListAvailable(stream.Context(), stream, appsArr)
 		log.Printf("finished")
 		if err != nil {
 			return err
